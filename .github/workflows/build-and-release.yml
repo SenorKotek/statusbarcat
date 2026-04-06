@@ -30,19 +30,7 @@ jobs:
           name: ayabar-app
           path: dist/ayabar.app.zip
 
-      - name: Update prebuilt app in repository
-        if: github.ref == 'refs/heads/main'
-        run: |
-          cp dist/ayabar.app.zip prebuilt/ayabar.app.zip
-
-      - name: Commit prebuilt app
-        if: github.ref == 'refs/heads/main'
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(prebuilt): refresh ayabar.app.zip"
-          file_pattern: prebuilt/ayabar.app.zip
-
-      - name: Create release
+      - name: Create first release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
