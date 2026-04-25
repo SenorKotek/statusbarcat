@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/.build/release"
-APP_NAME="ayabar"
+APP_NAME="statusbar_cat"
 APP_DIR="${ROOT_DIR}/build/${APP_NAME}.app"
 
 pushd "${ROOT_DIR}" >/dev/null
@@ -11,7 +11,7 @@ swift build -c release
 popd >/dev/null
 
 mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
-cp "${BUILD_DIR}/${APP_NAME}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
+cp "${BUILD_DIR}/ayabar" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
 cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -19,13 +19,13 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>ayabar</string>
+  <string>statusbar_cat</string>
   <key>CFBundleDisplayName</key>
-  <string>ayabar</string>
+  <string>statusbar_cat</string>
   <key>CFBundleExecutable</key>
-  <string>ayabar</string>
+  <string>statusbar_cat</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.ayabar.app</string>
+  <string>dev.statusbarcat.app</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CFBundleShortVersionString</key>
