@@ -5,14 +5,12 @@ final class AyabarAppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusView: CatStatusView!
     private var brain: CatBrain!
-
     private var beatTimer: Timer?
-    private var spinTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
-        statusItem = NSStatusBar.system.statusItem(withLength: 86)
-        statusView = CatStatusView(frame: NSRect(x: 0, y: 0, width: 86, height: 24))
+        statusItem = NSStatusBar.system.statusItem(withLength: 220)
+        statusView = CatStatusView(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
 
         if let button = statusItem.button {
             button.title = ""
@@ -26,19 +24,16 @@ final class AyabarAppDelegate: NSObject, NSApplicationDelegate {
             ])
         }
 
-        brain = CatBrain {
-            [weak self] frame in
+        brain = CatBrain { [weak self] frame in
             self?.statusView.set(frame: frame)
         }
 
         setupEventMonitors()
         scheduleBeat()
-        scheduleSpin()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         beatTimer?.invalidate()
-        spinTimer?.invalidate()
     }
 
     private func setupEventMonitors() {
@@ -62,15 +57,8 @@ final class AyabarAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func scheduleBeat() {
-        beatTimer = Timer.scheduledTimer(withTimeInterval: 0.16, repeats: true) { [weak self] _ in
+        beatTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
             self?.brain.tick()
-        }
-    }
-
-    private func scheduleSpin() {
-        spinTimer = Timer.scheduledTimer(withTimeInterval: Double.random(in: 6...14), repeats: false) { [weak self] _ in
-            self?.brain.startSpin()
-            self?.scheduleSpin()
         }
     }
 }
@@ -79,7 +67,7 @@ final class CatStatusView: NSView {
     private let label: NSTextField = {
         let text = NSTextField(labelWithString: "")
         text.alignment = .center
-        text.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .medium)
+        text.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
         text.textColor = .labelColor
         text.lineBreakMode = .byClipping
         return text
@@ -107,86 +95,133 @@ final class CatStatusView: NSView {
 }
 
 final class CatBrain {
-    private struct Frames {
-        static let breathe: [String] = [
-            "ᓚᘏᗢ~",
-            "ᓚᘏᗢ~~",
-            "ᓚᘏᗢ~"
-        ]
+    private enum LookDirection {
+        case left
+        case center
+        case right
+    }
 
-        static let leftPaw = "ᓚᘏᗢ/"
-        static let rightPaw = "\\ᓚᘏᗢ"
+    private enum PawPose: CaseIterable {
+        case rest
+        case leftStep
+        case rightStep
 
-        static let spin: [String] = [
-            "ᓚᘏᗢ~",
-            "(ᓚᘏᗢ)",
-            "~ᓚᘏᗢ",
-            "(ᓚᘏᗢ)"
-        ]
-
-        static let tail: [String] = [
-            "ᓚᘏᗢ~",
-            "ᓚᘏᗢ≈",
-            "ᓚᘏᗢ~"
-        ]
+        var paws: String {
+            switch self {
+            case .rest: " /|_|\\ "
+            case .leftStep: " _/|_|\\"
+            case .rightStep: " /|_|\\_"
+            }
+        }
     }
 
     private let render: (String) -> Void
 
-    private var breathIndex = 0
+    private var lookDirection: LookDirection = .center
+    private var typingTicks = 0
+    private var stompIndex = 0
+
+    private var blinkTicks = 0
+    private var tongueTicks = 0
+    private var blinkCooldown = Int.random(in: 18...45)
+    private var tongueCooldown = Int.random(in: 25...80)
+
     private var tailIndex = 0
-    private var spinIndex = 0
-    private var spinTicks = 0
-    private var pawTicks = 0
-    private var lookLeft = false
+    private let tailFrames = ["~", "≈", "~", "﹏"]
 
     init(render: @escaping (String) -> Void) {
         self.render = render
-        render(Frames.breathe[0])
+        render(renderCurrentFrame())
     }
 
     func tick() {
-        if spinTicks > 0 {
-            render(Frames.spin[spinIndex % Frames.spin.count])
-            spinIndex += 1
-            spinTicks -= 1
-            return
+        tailIndex = (tailIndex + 1) % tailFrames.count
+
+        if typingTicks > 0 {
+            typingTicks -= 1
+            blinkTicks = max(blinkTicks, 1)
+            stompIndex = (stompIndex + 1) % 2
         }
 
-        if pawTicks > 0 {
-            let paw = pawTicks.isMultiple(of: 2) ? Frames.leftPaw : Frames.rightPaw
-            pawTicks -= 1
-            render(applyLook(to: paw))
-            return
-        }
-
-        breathIndex = (breathIndex + 1) % Frames.breathe.count
-        tailIndex = (tailIndex + 1) % Frames.tail.count
-
-        let frame = breathIndex.isMultiple(of: 2) ? Frames.breathe[breathIndex] : Frames.tail[tailIndex]
-        render(applyLook(to: frame))
+        updateBlinkState()
+        updateTongueState()
+        render(renderCurrentFrame())
     }
 
     func reactToKeyPress() {
-        pawTicks = 6
+        typingTicks = max(typingTicks, 12)
     }
 
     func followCursor(_ point: NSPoint) {
-        if point.x.isNaN { return }
-        lookLeft = point.x < NSScreen.main?.frame.midX ?? 0
+        guard !point.x.isNaN else { return }
+        let screenFrame = NSScreen.main?.frame ?? .zero
+        let leftThreshold = screenFrame.minX + screenFrame.width * 0.42
+        let rightThreshold = screenFrame.minX + screenFrame.width * 0.58
+
+        if point.x < leftThreshold {
+            lookDirection = .left
+        } else if point.x > rightThreshold {
+            lookDirection = .right
+        } else {
+            lookDirection = .center
+        }
     }
 
-    func startSpin() {
-        spinTicks = 8
-        spinIndex = 0
+    private func updateBlinkState() {
+        if blinkTicks > 0 {
+            blinkTicks -= 1
+            return
+        }
+
+        blinkCooldown -= 1
+        if blinkCooldown <= 0 {
+            blinkTicks = Int.random(in: 2...3)
+            blinkCooldown = Int.random(in: 22...58)
+        }
     }
 
-    private func applyLook(to frame: String) -> String {
-        guard lookLeft else { return frame }
-        return String(frame.reversed())
+    private func updateTongueState() {
+        if tongueTicks > 0 {
+            tongueTicks -= 1
+            return
+        }
+
+        tongueCooldown -= 1
+        if tongueCooldown <= 0 {
+            tongueTicks = Int.random(in: 3...5)
+            tongueCooldown = Int.random(in: 45...95)
+        }
+    }
+
+    private func renderCurrentFrame() -> String {
+        let eyes = currentEyes()
+        let mouth = tongueTicks > 0 ? "ᴗ⌣" : "ᴗ◡"
+
+        let pawPose: PawPose
+        if typingTicks > 0 {
+            pawPose = stompIndex.isMultiple(of: 2) ? .leftStep : .rightStep
+        } else {
+            pawPose = .rest
+        }
+
+        return " /\\_/\\ (\(eyes))<\(mouth)>\(pawPose.paws)\(tailFrames[tailIndex])"
+    }
+
+    private func currentEyes() -> String {
+        if blinkTicks > 0 {
+            return "- -"
+        }
+
+        switch lookDirection {
+        case .left:
+            return "◉ ·"
+        case .right:
+            return "· ◉"
+        case .center:
+            return "• •"
+        }
     }
 }
-
 
 @main
 enum AyabarMain {
